@@ -1,0 +1,103 @@
+---
+title: "Predicting Grades"
+author: "Ricardo Leon Coronado"
+date: "12/2/2021"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(mosaic)
+library(ResourceSelection)
+```
+
+
+```{r}
+#Import the data
+
+math325Train <- read.csv("C:/Users/ricle/OneDrive - BYU-Idaho/Fall 21/Statistics-Notebook-master(1)/Statistics-Notebook-master/Data/Math325Grades_Train-1.csv", stringsAsFactors=TRUE)
+
+Test <- read.csv("C:/Users/ricle/OneDrive - BYU-Idaho/Fall 21/Statistics-Notebook-master(1)/Statistics-Notebook-master/Data/Math325Grades_Test-1.csv", stringsAsFactors=TRUE)
+View(Test)
+
+```
+
+
+```{r}
+pairs(math325Train[c(2, 18, 31:37)], panel = panel.smooth)
+```
+
+
+```{r}
+math325Train <- math325Train %>% 
+  mutate(FinalGrade1 = ifelse(FinalGrade == "A", 1, 0), 
+         SkillsQuizzesCat = ifelse(SkillsQuizzesTotal >= 13, 1, 0),
+         ClassActivitiesTotalCat = ifelse(ClassActivitiesTotal == 5, 1, 0))
+View(math325Train)
+
+
+
+#FinalGrade ~ SkillQUizz
+Scores  <- glm(FinalGrade1 ~ AnalysisTotal, data = math325Train, 
+               family = "binomial") #AIC: 66.879
+summary(Scores)
+
+Scores  <- glm(FinalGrade1 ~ SkillsQuizzesTotal, data = math325Train, 
+               family = "binomial") #AIC: 151.74
+
+Scores  <- glm(FinalGrade1 ~ AnalysisTotal + SkillsQuizzesCat, data = math325Train, 
+               family = "binomial") #AIC: 67.957 #Not significant values and higher AIC
+
+Scores  <- glm(FinalGrade1 ~ AnalysisTotal + SkillsQuizzesCat:AnalysisTotal+SkillsQuizzesCat, data = math325Train, 
+               family = "binomial") #AIC 68.351 #Not significant values and higher AIC
+
+Scores  <- glm(FinalGrade1 ~ AnalysisTotal + ClassActivitiesTotal, data = math325Train, family = "binomial") #AIC 60.845 #All significant values and lower AIC
+
+
+
+
+
+
+summary(Scores)
+#Regression
+```
+
+
+
+```{r}
+ggplot(data=math325Train,  aes(AnalysisTotal, as.numeric(FinalGrade == "A"), col=as.factor(ClassActivitiesTotalCat)))  +
+  geom_jitter(height = 0.01) +
+  geom_smooth(method="glm", method.args=list(family="binomial"), se=FALSE)  +
+  theme_bw() 
+```
+```{r}
+#Validation
+
+#Predicted values will be probabilities, but the output is 0 or 1 (whether it's an "A" or not)
+
+set.seed(123)
+
+n <- nrow(math325Train)
+nkeep <- sample(1:n, 96)
+my_train <- math325Train[nkeep, ] #96 values goes in here 
+my_test <- math325Train[-nkeep, ] #n values go in here (24 remaining not keeps)
+
+
+MathVal <- glm(FinalGrade1 ~ AnalysisTotal + ClassActivitiesTotal, data = math325Train, family = "binomial")
+
+mypreds <- (predict(MathVal, newdata = my_test, type = "response"))
+
+table(mypreds > 0.5, my_test$FinalGrade) #tuning parameter = 0.5, 0.1, ...
+#TRUE (this person will get an "A" on the final)
+#FALSE (this person will not get an "A" on the final)
+
+#table(mypreds > 0.5)
+#number of people we guessed correctly / keep length
+(11+11)/24 #divided by the sample size
+```
+```{r}
+Test$FinalGrade <- ifelse(predict(Scores, Test, type="response") > 0.5, "A", "Other")
+
+write.csv(Test, "Test.csv", row.names=FALSE)
+```
+
